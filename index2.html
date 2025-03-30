@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Drone Flight Simulator - Mission Objective</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: sans-serif;
+      background-color: #000;
+      color: #fff;
+    }
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 100;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 10px;
+      border-radius: 5px;
+    }
+    #info p {
+      margin: 5px 0;
+    }
+    #missionStatus {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 128, 0, 0.8);
+      padding: 10px 20px;
+      border-radius: 5px;
+      font-size: 1.2em;
+      display: none;
+      z-index: 100;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <p><strong>Drone Flight Simulator</strong></p>
+    <p>Use arrow keys to move the drone.</p>
+    <p>W/S: Forward/Backward, A/D: Strafe Left/Right</p>
+    <p>Space/Ctrl: Ascend/Descend</p>
+    <p><strong>Mission:</strong> Fly the drone through the target ring!</p>
+  </div>
+  <div id="missionStatus">Mission Accomplished!</div>
+  
+  <!-- Three.js Library from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  
+  <script>
+    // Scene Setup
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+
+    // Camera Setup
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 2000);
+    camera.position.set(0, 50, 150);
+
+    // Renderer Setup
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(100, 100, 50);
+    scene.add(directionalLight);
+
+    // Ground Plane
+    const groundGeo = new THREE.PlaneGeometry(1000, 1000);
+    const groundMat = new THREE.MeshPhongMaterial({ color: 0x444444 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = 0;
+    scene.add(ground);
+
+    // Drone Object
+    const drone = new THREE.Group();
+    // Drone body
+    const bodyGeo = new THREE.BoxGeometry(10, 4, 10);
+    const bodyMat = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    drone.add(body);
+    // Drone propellers (four small spheres)
+    const propGeo = new THREE.SphereGeometry(1.5, 16, 16);
+    const propMat = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+    const offsets = [
+      [5, 2, 5],
+      [-5, 2, 5],
+      [5, 2, -5],
+      [-5, 2, -5]
+    ];
+    offsets.forEach(off => {
+      const prop = new THREE.Mesh(propGeo, propMat);
+      prop.position.set(off[0], off[1], off[2]);
+      drone.add(prop);
+    });
+    drone.position.set(0, 20, 0);
+    scene.add(drone);
+
+    // Create Target Ring (mission objective)
+    const targetInnerRadius = 15;
+    const targetOuterRadius = 20;
+    const targetGeo = new THREE.RingGeometry(targetInnerRadius, targetOuterRadius, 32);
+    // Use a basic material with double side so it shows from both sides.
+    const targetMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, side: THREE.DoubleSide });
+    const targetRing = new THREE.Mesh(targetGeo, targetMat);
+    // Rotate the ring to be vertical (facing the drone)
+    targetRing.rotation.x = Math.PI / 2;
+    // Place the target at a fixed location in the scene (for example, ahead of the drone)
+    targetRing.position.set(0, 30, -100);
+    scene.add(targetRing);
+
+    // Obstacles (dynamic cubes)
+    const obstacles = [];
+    const obstacleGeo = new THREE.BoxGeometry(10, 10, 10);
+    const obstacleMat = new THREE.MeshPhongMaterial({ color: 0xffaa00 });
+    for (let i = 0; i < 10; i++) {
+      const obstacle = new THREE.Mesh(obstacleGeo, obstacleMat);
+      obstacle.position.set(
+        (Math.random() - 0.5) * 400,
+        5,
+        (Math.random() - 0.5) * 400
+      );
+      obstacles.push(obstacle);
+      scene.add(obstacle);
+    }
+
+    // Controls & Movement Variables
+    const keys = {};
+    document.addEventListener('keydown', (e) => { keys[e.code] = true; });
+    document.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+    // Mission Status Element
+    const missionStatus = document.getElementById('missionStatus');
+
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Drone movement controls
+      const speed = 1.2;
+      if (keys['ArrowUp'] || keys['KeyW']) {
+        drone.position.z -= speed;
+      }
+      if (keys['ArrowDown'] || keys['KeyS']) {
+        drone.position.z += speed;
+      }
+      if (keys['ArrowLeft'] || keys['KeyA']) {
+        drone.position.x -= speed;
+      }
+      if (keys['ArrowRight'] || keys['KeyD']) {
+        drone.position.x += speed;
+      }
+      if (keys['Space']) {
+        drone.position.y += speed;
+      }
+      if (keys['ControlLeft'] || keys['ControlRight']) {
+        drone.position.y -= speed;
+      }
+      
+      // Collision detection with obstacles
+      obstacles.forEach(ob => {
+        const distance = drone.position.distanceTo(ob.position);
+        if (distance < 10) {
+          alert("Collision detected! Resetting drone position.");
+          resetDrone();
+        }
+      });
+
+      // Check if drone passes through target ring
+      const targetCenter = targetRing.position;
+      const distanceToTarget = drone.position.distanceTo(targetCenter);
+      // Check if drone is near the target and at approximately the same height as the target ring
+      if (distanceToTarget < 15 && Math.abs(drone.position.y - targetCenter.y) < 10) {
+        missionStatus.style.display = "block";
+        setTimeout(() => {
+          missionStatus.style.display = "none";
+          resetDrone();
+        }, 2000);
+      }
+
+      // Update camera to follow drone smoothly
+      camera.position.lerp(new THREE.Vector3(drone.position.x, drone.position.y + 50, drone.position.z + 150), 0.05);
+      camera.lookAt(drone.position);
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Reset drone position to starting point
+    function resetDrone() {
+      drone.position.set(0, 20, 0);
+    }
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
